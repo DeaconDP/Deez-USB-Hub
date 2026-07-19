@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { usePortDiagnostic } from "../hooks/usePortDiagnostic";
 import {
   deviceHasPnpProblem,
   deviceHealthLabel,
@@ -9,22 +10,27 @@ import {
 import {
   classLabel,
   hexId,
+  type DiagnosticClassification,
   type UsbDevice,
   type UsbPort,
 } from "../types/usb";
 
 interface DetailsPanelProps {
   device: UsbDevice | null;
+  port: UsbPort | null;
   faultPort: UsbPort | null;
   state: "loading" | "ready" | "error" | "empty";
   error: string | null;
+  refresh: () => Promise<void>;
 }
 
 export function DetailsPanel({
   device,
+  port,
   faultPort,
   state,
   error,
+  refresh,
 }: DetailsPanelProps) {
   const subtitle = device
     ? devicePrimaryLabel(device)
@@ -54,6 +60,10 @@ export function DetailsPanel({
           Pick a device in the center pane to inspect descriptors, interfaces,
           and PnP data.
         </p>
+      )}
+
+      {state !== "loading" && state !== "error" && port && (
+        <PortDiagnostic port={port} refresh={refresh} />
       )}
 
       {state !== "loading" && state !== "error" && !device && faultPort && (
@@ -254,6 +264,136 @@ export function DetailsPanel({
         </div>
       )}
     </section>
+  );
+}
+
+const CLASSIFICATION_LABEL: Record<DiagnosticClassification, string> = {
+  healthy: "Likely healthy",
+  intermittent: "Intermittent connection",
+  windowsReportedFault: "Windows-reported fault",
+  inconclusive: "Inconclusive",
+};
+
+function PortDiagnostic({
+  port,
+  refresh,
+}: {
+  port: UsbPort;
+  refresh: () => Promise<void>;
+}) {
+  const diagnostic = usePortDiagnostic(port.id, refresh);
+  const [confirmed, setConfirmed] = useState(false);
+
+  useEffect(() => setConfirmed(false), [port.id, diagnostic.result]);
+
+  const feedbackError = diagnostic.error;
+  const recoverySucceeded = diagnostic.recoveryResult?.status === "succeeded";
+
+  return (
+    <div
+      className="port-diagnostic"
+      aria-busy={diagnostic.busy || diagnostic.recoveryBusy}
+    >
+      <div className="diagnostic-heading">
+        <div>
+          <h3>Port assessment</h3>
+          <p>
+            Test port {port.portIndex} with a known-good, low-risk device and
+            cable. Avoid storage, hubs, network adapters, keyboards, and mice.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-diagnostic"
+          onClick={() => void diagnostic.start()}
+          disabled={diagnostic.busy || diagnostic.recoveryBusy}
+        >
+          {diagnostic.busy ? "Testing…" : "Test this port"}
+        </button>
+      </div>
+
+      {diagnostic.busy && (
+        <div className="diagnostic-progress" role="status" aria-live="polite">
+          <progress max={12} value={diagnostic.sampleProgress} />
+          <p>
+            Sample {Math.min(diagnostic.sampleProgress + 1, 12)} of 12. Gently
+            plug and unplug the test device once; do not wiggle a damaged
+            connector.
+          </p>
+          <button type="button" className="btn-quiet" onClick={diagnostic.cancel}>
+            Cancel assessment
+          </button>
+        </div>
+      )}
+
+      {diagnostic.state === "cancelled" && (
+        <p className="action-feedback" role="status">
+          Assessment cancelled. Windows is finishing the current read-only scan.
+        </p>
+      )}
+
+      {diagnostic.result && (
+        <div className="diagnostic-result" aria-live="polite">
+          <p className={`diagnostic-verdict verdict-${diagnostic.result.classification}`}>
+            {CLASSIFICATION_LABEL[diagnostic.result.classification]}
+          </p>
+          <p>{diagnostic.result.summary}</p>
+          <Dl
+            rows={[
+              ["Samples", String(diagnostic.result.samples.length)],
+              ["Connection changes", String(diagnostic.result.transitionCount)],
+              ["Fault samples", String(diagnostic.result.faultCount)],
+            ]}
+          />
+          <p className="diagnostic-limit">
+            This observes Windows USB state; it cannot electrically certify or
+            physically repair the connector.
+          </p>
+
+          {diagnostic.result.recoveryAllowed ? (
+            <div className="recovery-action">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={confirmed}
+                  onChange={(event) => setConfirmed(event.target.checked)}
+                  disabled={diagnostic.recoveryBusy}
+                />
+                I understand this briefly disconnects the device on this port.
+              </label>
+              <button
+                type="button"
+                className="btn-recovery"
+                onClick={() => void diagnostic.recover()}
+                disabled={!confirmed || diagnostic.recoveryBusy || diagnostic.busy}
+              >
+                {diagnostic.recoveryBusy
+                  ? "Attempting recovery…"
+                  : "Attempt port recovery"}
+              </button>
+            </div>
+          ) : (
+            <p className="action-feedback action-warning" role="status">
+              {diagnostic.result.recoveryBlockedReason}
+            </p>
+          )}
+        </div>
+      )}
+
+      {feedbackError && (
+        <p className="action-feedback action-error" role="alert">
+          {feedbackError}
+        </p>
+      )}
+      {diagnostic.recoveryResult && (
+        <p
+          className={`action-feedback ${recoverySucceeded ? "action-success" : "action-warning"}`}
+          role={recoverySucceeded ? "status" : "alert"}
+        >
+          {diagnostic.recoveryResult.message} ({diagnostic.recoveryResult.code})
+        </p>
+      )}
+    </div>
   );
 }
 

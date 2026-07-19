@@ -105,10 +105,11 @@ button:focus-visible,
 }
 
 .brand-mark {
-  margin: 0;
-  font-size: 1.75rem;
-  color: var(--accent);
-  line-height: 1;
+  display: block;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .brand {
@@ -516,6 +517,157 @@ button:focus-visible,
   font-size: 0.82rem;
 }
 
+.port-diagnostic {
+  margin: 0.75rem 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--busy);
+  background: rgba(92, 184, 255, 0.05);
+}
+
+.diagnostic-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.diagnostic-heading h3 {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.diagnostic-heading p,
+.diagnostic-result > p,
+.diagnostic-progress p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+
+.btn-diagnostic,
+.btn-recovery,
+.btn-quiet {
+  flex: 0 0 auto;
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius);
+  background: rgba(61, 255, 192, 0.06);
+  color: var(--accent);
+  padding: 0.45rem 0.7rem;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.btn-quiet {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.btn-diagnostic:disabled,
+.btn-recovery:disabled,
+.btn-quiet:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.diagnostic-progress,
+.diagnostic-result {
+  margin-top: 0.75rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+}
+
+.diagnostic-progress progress {
+  width: 100%;
+  height: 0.35rem;
+  margin-bottom: 0.45rem;
+  accent-color: var(--busy);
+}
+
+.diagnostic-progress .btn-quiet {
+  margin-top: 0.55rem;
+}
+
+.diagnostic-verdict {
+  margin-bottom: 0.35rem !important;
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--text) !important;
+}
+
+.verdict-healthy {
+  color: var(--accent) !important;
+}
+
+.verdict-intermittent,
+.verdict-inconclusive {
+  color: var(--warn) !important;
+}
+
+.verdict-windowsReportedFault {
+  color: var(--error) !important;
+}
+
+.diagnostic-result .detail-dl {
+  margin-top: 0.55rem;
+}
+
+.diagnostic-limit {
+  margin-top: 0.65rem !important;
+}
+
+.recovery-action {
+  margin-top: 0.75rem;
+  padding-top: 0.7rem;
+  border-top: 1px dashed var(--line);
+}
+
+.recovery-action label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.recovery-action input {
+  margin-top: 0.2rem;
+  accent-color: var(--accent);
+}
+
+.recovery-action .btn-recovery {
+  margin-top: 0.6rem;
+}
+
+.action-feedback {
+  margin: 0.7rem 0 0;
+  padding: 0.55rem 0.65rem;
+  border-left: 2px solid var(--busy);
+  background: rgba(92, 184, 255, 0.07);
+  font-size: 0.8rem;
+}
+
+.action-success {
+  border-left-color: var(--accent);
+  background: rgba(61, 255, 192, 0.07);
+}
+
+.action-warning {
+  border-left-color: var(--warn);
+  background: rgba(240, 180, 41, 0.07);
+}
+
+.action-error {
+  border-left-color: var(--error);
+  background: rgba(255, 92, 122, 0.07);
+}
+
 .details-body {
   padding: 0.5rem 1rem 1.25rem;
 }
@@ -659,5 +811,42 @@ button:focus-visible,
 
   .detail-row {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 420px) {
+  .app-header {
+    gap: 0.65rem;
+    padding-inline: 0.75rem;
+  }
+
+  .brand-block {
+    gap: 0.6rem;
+  }
+
+  .brand-mark {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .live-meta {
+    display: none;
+  }
+
+  .port-diagnostic {
+    margin: 0.6rem 0.7rem;
+  }
+
+  .diagnostic-heading {
+    display: block;
+  }
+
+  .diagnostic-heading .btn-diagnostic {
+    width: 100%;
+    margin-top: 0.7rem;
+  }
+
+  .recovery-action .btn-recovery {
+    width: 100%;
   }
 }

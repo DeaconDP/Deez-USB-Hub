@@ -2,8 +2,8 @@
 //! Walks host controllers → root hubs → ports (including empty) → nested hubs.
 
 use crate::usb::model::{
-    chrono_like_now, port_status_label, UsbConfiguration, UsbController, UsbDevice, UsbEndpoint,
-    UsbHub, UsbInterface, UsbPort, UsbTopology, UsbWarning, PortStatus,
+    chrono_like_now, port_status_label, PortStatus, UsbConfiguration, UsbController, UsbDevice,
+    UsbEndpoint, UsbHub, UsbInterface, UsbPort, UsbTopology, UsbWarning,
 };
 use crate::usb::pnp::{enrich_device, PnPIndex};
 use std::collections::HashSet;
@@ -21,11 +21,14 @@ use windows::{
             Usb::{
                 GUID_DEVINTERFACE_USB_HOST_CONTROLLER, GUID_DEVINTERFACE_USB_HUB,
                 IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION,
-                IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME, IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX,
-                IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX_V2, IOCTL_USB_GET_NODE_CONNECTION_NAME,
-                IOCTL_USB_GET_NODE_INFORMATION, IOCTL_USB_GET_ROOT_HUB_NAME, USB_CONNECTION_STATUS,
-                USB_DESCRIPTOR_REQUEST, USB_NODE_CONNECTION_INFORMATION_EX,
-                USB_NODE_CONNECTION_INFORMATION_EX_V2, USB_NODE_INFORMATION, USB_HUB_NODE,
+                IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME,
+                IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX,
+                IOCTL_USB_GET_NODE_CONNECTION_INFORMATION_EX_V2,
+                IOCTL_USB_GET_NODE_CONNECTION_NAME, IOCTL_USB_GET_NODE_INFORMATION,
+                IOCTL_USB_GET_ROOT_HUB_NAME, IOCTL_USB_HUB_CYCLE_PORT, USB_CONNECTION_STATUS,
+                USB_CYCLE_PORT_PARAMS, USB_DESCRIPTOR_REQUEST, USB_HUB_NODE,
+                USB_NODE_CONNECTION_INFORMATION_EX, USB_NODE_CONNECTION_INFORMATION_EX_V2,
+                USB_NODE_INFORMATION,
             },
         },
         Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
@@ -50,7 +53,9 @@ pub fn enumerate_topology() -> Result<UsbTopology, String> {
     let host_ifaces = match enum_device_interfaces(&GUID_DEVINTERFACE_USB_HOST_CONTROLLER) {
         Ok(v) => v,
         Err(e) => {
-            return Err(format!("USB-001: Failed to enumerate host controllers: {e}"));
+            return Err(format!(
+                "USB-001: Failed to enumerate host controllers: {e}"
+            ));
         }
     };
 
@@ -316,10 +321,8 @@ fn get_devinfo_string(
         )
         .is_ok()
         {
-            let wide = std::slice::from_raw_parts(
-                buf.as_ptr() as *const u16,
-                required as usize / 2,
-            );
+            let wide =
+                std::slice::from_raw_parts(buf.as_ptr() as *const u16, required as usize / 2);
             let s = String::from_utf16_lossy(wide);
             let trimmed = s.trim_end_matches('\0').trim().to_string();
             if trimmed.is_empty() {
@@ -392,15 +395,14 @@ fn get_root_hub_name(hc: HANDLE) -> Result<String, String> {
             return Err("Root hub name buffer too small".into());
         }
         let name_bytes = &buf[4..returned as usize];
-        let wide = std::slice::from_raw_parts(
-            name_bytes.as_ptr() as *const u16,
-            name_bytes.len() / 2,
-        );
+        let wide =
+            std::slice::from_raw_parts(name_bytes.as_ptr() as *const u16, name_bytes.len() / 2);
         let s = String::from_utf16_lossy(wide);
         Ok(s.trim_end_matches('\0').to_string())
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn walk_hub(
     path: &str,
     hub_id: &str,
@@ -464,8 +466,7 @@ fn walk_hub(
         let speed = speed_label(unsafe { std::ptr::addr_of!(conn.Speed).read_unaligned() });
         let superspeed = get_superspeed_capable(handle, port_index);
         let is_hub = unsafe { std::ptr::addr_of!(conn.DeviceIsHub).read_unaligned() };
-        let device_address =
-            unsafe { std::ptr::addr_of!(conn.DeviceAddress).read_unaligned() };
+        let device_address = unsafe { std::ptr::addr_of!(conn.DeviceAddress).read_unaligned() };
         let desc = read_device_descriptor(&conn);
 
         let mut device_id: Option<String> = None;
@@ -647,10 +648,36 @@ fn get_connection_info(
     }
 }
 
+pub fn cycle_port_device(hub_path: &str, port_index: u32) -> Result<u32, String> {
+    let handle = open_device(hub_path).map_err(|e| format!("USB-004: {e}"))?;
+    let mut params = USB_CYCLE_PORT_PARAMS {
+        ConnectionIndex: port_index,
+        StatusReturned: 0,
+    };
+    let mut returned = 0u32;
+    let result = unsafe {
+        DeviceIoControl(
+            handle,
+            IOCTL_USB_HUB_CYCLE_PORT,
+            Some(&params as *const _ as *const _),
+            std::mem::size_of::<USB_CYCLE_PORT_PARAMS>() as u32,
+            Some(&mut params as *mut _ as *mut _),
+            std::mem::size_of::<USB_CYCLE_PORT_PARAMS>() as u32,
+            Some(&mut returned),
+            None,
+        )
+    };
+    let _ = unsafe { CloseHandle(handle) };
+    result.map_err(|e| format!("USB-004: IOCTL_USB_HUB_CYCLE_PORT failed: {e}"))?;
+    Ok(unsafe { std::ptr::addr_of!(params.StatusReturned).read_unaligned() })
+}
+
 fn get_superspeed_capable(hub: HANDLE, port_index: u32) -> Option<bool> {
-    let mut info = USB_NODE_CONNECTION_INFORMATION_EX_V2::default();
-    info.ConnectionIndex = port_index;
-    info.Length = std::mem::size_of::<USB_NODE_CONNECTION_INFORMATION_EX_V2>() as u32;
+    let mut info = USB_NODE_CONNECTION_INFORMATION_EX_V2 {
+        ConnectionIndex: port_index,
+        Length: std::mem::size_of::<USB_NODE_CONNECTION_INFORMATION_EX_V2>() as u32,
+        ..Default::default()
+    };
     let mut returned = 0u32;
     unsafe {
         if DeviceIoControl(
@@ -712,10 +739,8 @@ fn get_driver_key(hub: HANDLE, port_index: u32) -> Result<String, String> {
             return Err("driver key empty".into());
         }
         let name_bytes = &buf[8..returned as usize];
-        let wide = std::slice::from_raw_parts(
-            name_bytes.as_ptr() as *const u16,
-            name_bytes.len() / 2,
-        );
+        let wide =
+            std::slice::from_raw_parts(name_bytes.as_ptr() as *const u16, name_bytes.len() / 2);
         Ok(String::from_utf16_lossy(wide)
             .trim_end_matches('\0')
             .to_string())
@@ -760,10 +785,8 @@ fn get_connection_name(hub: HANDLE, port_index: u32) -> Result<String, String> {
             return Err("connection name empty".into());
         }
         let name_bytes = &buf[8..returned as usize];
-        let wide = std::slice::from_raw_parts(
-            name_bytes.as_ptr() as *const u16,
-            name_bytes.len() / 2,
-        );
+        let wide =
+            std::slice::from_raw_parts(name_bytes.as_ptr() as *const u16, name_bytes.len() / 2);
         Ok(String::from_utf16_lossy(wide)
             .trim_end_matches('\0')
             .to_string())
@@ -828,10 +851,8 @@ fn get_string_descriptor(hub: HANDLE, port_index: u32, index: u8) -> Option<Stri
             return None;
         }
         let char_bytes = &desc[2..];
-        let wide = std::slice::from_raw_parts(
-            char_bytes.as_ptr() as *const u16,
-            char_bytes.len() / 2,
-        );
+        let wide =
+            std::slice::from_raw_parts(char_bytes.as_ptr() as *const u16, char_bytes.len() / 2);
         let s = String::from_utf16_lossy(wide)
             .trim_end_matches('\0')
             .trim()
@@ -850,7 +871,7 @@ fn get_configurations(
     num_configurations: u8,
 ) -> Vec<UsbConfiguration> {
     let mut configs = Vec::new();
-    let n = num_configurations.max(1).min(8);
+    let n = num_configurations.clamp(1, 8);
     for cfg_idx in 0..n {
         if let Some(cfg) = get_config_descriptor(hub, port_index, cfg_idx) {
             configs.push(cfg);

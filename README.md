@@ -39,9 +39,20 @@ npm run tauri build
 |------|------|
 | **Ports** | Controllers → hubs → ports (empty ports shown) |
 | **Devices** | Devices under the current selection |
-| **Details** | VID/PID, strings, speed, interfaces, endpoints, PnP/driver |
+| **Details** | VID/PID, strings, speed, interfaces, endpoints, PnP/driver, guided port assessment |
 
 Hotplug: the tree refreshes automatically when devices are plugged or unplugged. Use **Refresh** for a manual pass.
+
+## Assess and recover a port
+
+1. Select an occupied, empty, or faulted port and open **Details**.
+2. Choose **Test this port**, then use a known-good, low-risk USB device and cable during the six-second sample window.
+3. Review the observed Windows state: likely healthy, intermittent, Windows-reported fault, or inconclusive.
+4. If the target passes the safety policy, confirm **Attempt port recovery** to ask Windows to cycle that one hub port.
+
+Assessment is observational, not an electrical certification. It cannot repair bent pins, debris, worn connectors, cracked solder joints, bad cables, inadequate power, or damaged controller hardware. Stop and inspect the hardware after overcurrent; recovery is deliberately blocked.
+
+Diagnostics run without elevation. Port recovery normally requires closing the app and launching it as administrator. Recovery is also blocked for hubs/downstream trees, storage, input, network, and wireless devices to avoid data loss or loss of control/connectivity.
 
 ## Known gaps
 
@@ -50,7 +61,8 @@ Hotplug: the tree refreshes automatically when devices are plugged or unplugged.
 - Companion USB 2.0 / 3.x port pairs can look like “extra” ports on the same physical connector — that is how Windows exposes them.
 - String descriptors and endpoint tables depend on what the hub stack returns; composite devices may appear as multiple PnP nodes.
 - macOS/Linux backends are not implemented yet (Windows-first).
-- Read-only — no eject, disable, or power policy in v1.
+- Recovery only cycles one eligible hub port. The app does not eject, disable/enable, reset controllers, or change power policy.
+- A successful cycle means Windows accepted the request; it does not prove a physical fault was repaired.
 
 ## Error codes
 
@@ -59,6 +71,9 @@ Hotplug: the tree refreshes automatically when devices are plugged or unplugged.
 | `USB-001` | Topology enumeration failed |
 | `USB-002` | Hub open denied or IOCTL failed |
 | `USB-003` | Platform not supported |
+| `USB-004` | Windows port-cycle operation failed or needs elevation |
+| `USB-005` | Recovery target or request denied by safety policy |
+| `USB-006` | Another diagnostic/recovery operation is already running |
 
 ## Security
 

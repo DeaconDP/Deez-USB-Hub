@@ -71,6 +71,59 @@ pub enum PortStatus {
     Unmapped,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum DiagnosticClassification {
+    Healthy,
+    Intermittent,
+    WindowsReportedFault,
+    Inconclusive,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortDiagnosticSample {
+    pub status: PortStatus,
+    pub status_label: String,
+    pub device_id: Option<String>,
+    pub speed: Option<String>,
+    pub pnp_problem_code: Option<u32>,
+    pub sampled_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortDiagnosticResult {
+    pub port_id: String,
+    pub classification: DiagnosticClassification,
+    pub summary: String,
+    pub samples: Vec<PortDiagnosticSample>,
+    pub fault_count: u32,
+    pub transition_count: u32,
+    pub recovery_allowed: bool,
+    pub recovery_blocked_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RecoveryStatus {
+    Succeeded,
+    Denied,
+    ElevationRequired,
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortRecoveryResult {
+    pub port_id: String,
+    pub status: RecoveryStatus,
+    pub code: String,
+    pub message: String,
+    pub before_status: PortStatus,
+    pub after_status: Option<PortStatus>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsbDevice {
@@ -139,7 +192,7 @@ pub struct UsbEndpoint {
 
 impl UsbTopology {
     #[allow(dead_code)]
-pub fn empty_with_warning(code: &str, message: &str) -> Self {
+    pub fn empty_with_warning(code: &str, message: &str) -> Self {
         Self {
             controllers: vec![],
             devices: vec![],
@@ -154,9 +207,67 @@ pub fn empty_with_warning(code: &str, message: &str) -> Self {
 
     pub fn fingerprint(&self) -> String {
         use sha2::{Digest, Sha256};
-        let payload = serde_json::to_string(self).unwrap_or_default();
+        // The observation timestamp changes on every scan and is not topology.
+        let payload = serde_json::to_string(&(&self.controllers, &self.devices, &self.warnings))
+            .unwrap_or_default();
         let hash = Sha256::digest(payload.as_bytes());
         hex::encode(hash)
+    }
+}
+
+pub fn classify_diagnostic(
+    port_id: String,
+    samples: Vec<PortDiagnosticSample>,
+    recovery_blocked_reason: Option<String>,
+) -> PortDiagnosticResult {
+    let fault_count = samples
+        .iter()
+        .filter(|sample| !matches!(sample.status, PortStatus::Empty | PortStatus::Connected))
+        .count() as u32;
+    let transition_count = samples
+        .windows(2)
+        .filter(|pair| pair[0].status != pair[1].status || pair[0].device_id != pair[1].device_id)
+        .count() as u32;
+    let connected_count = samples
+        .iter()
+        .filter(|sample| sample.status == PortStatus::Connected)
+        .count();
+    let has_pnp_fault = samples
+        .iter()
+        .any(|sample| sample.pnp_problem_code.is_some_and(|code| code != 0));
+
+    let (classification, summary) = if fault_count > 0 || has_pnp_fault {
+        (
+            DiagnosticClassification::WindowsReportedFault,
+            "Windows reported a USB connection or Plug and Play fault during the test.".into(),
+        )
+    } else if transition_count >= 3 {
+        (
+            DiagnosticClassification::Intermittent,
+            "The connection changed repeatedly during the test, which suggests an unstable port, cable, or device.".into(),
+        )
+    } else if connected_count > 0 {
+        (
+            DiagnosticClassification::Healthy,
+            "The test device enumerated without repeated dropouts or a Windows-reported fault."
+                .into(),
+        )
+    } else {
+        (
+            DiagnosticClassification::Inconclusive,
+            "No persistent fault was observed. Repeat with a known-good device and cable if the problem is intermittent.".into(),
+        )
+    };
+
+    PortDiagnosticResult {
+        port_id,
+        classification,
+        summary,
+        samples,
+        fault_count,
+        transition_count,
+        recovery_allowed: recovery_blocked_reason.is_none(),
+        recovery_blocked_reason,
     }
 }
 
@@ -213,5 +324,77 @@ pub fn class_name(class: u8) -> &'static str {
         0xFE => "Application Specific",
         0xFF => "Vendor Specific",
         _ => "Unknown",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample(status: PortStatus, device_id: Option<&str>) -> PortDiagnosticSample {
+        PortDiagnosticSample {
+            status: status.clone(),
+            status_label: port_status_label(&status).into(),
+            device_id: device_id.map(str::to_string),
+            speed: None,
+            pnp_problem_code: None,
+            sampled_at: "0".into(),
+        }
+    }
+
+    #[test]
+    fn fingerprint_ignores_observation_time() {
+        let mut first = UsbTopology::empty_with_warning("USB-001", "test");
+        let mut second = first.clone();
+        first.enumerated_at = "1".into();
+        second.enumerated_at = "2".into();
+        assert_eq!(first.fingerprint(), second.fingerprint());
+    }
+
+    #[test]
+    fn classifies_repeated_transitions_as_intermittent() {
+        let result = classify_diagnostic(
+            "hc-0-root-p1".into(),
+            vec![
+                sample(PortStatus::Connected, Some("device")),
+                sample(PortStatus::Empty, None),
+                sample(PortStatus::Connected, Some("device")),
+                sample(PortStatus::Empty, None),
+            ],
+            None,
+        );
+        assert_eq!(
+            result.classification,
+            DiagnosticClassification::Intermittent
+        );
+        assert_eq!(result.transition_count, 3);
+    }
+
+    #[test]
+    fn windows_fault_takes_priority() {
+        let result = classify_diagnostic(
+            "hc-0-root-p1".into(),
+            vec![sample(PortStatus::FailedEnumeration, None)],
+            Some("blocked".into()),
+        );
+        assert_eq!(
+            result.classification,
+            DiagnosticClassification::WindowsReportedFault
+        );
+        assert!(!result.recovery_allowed);
+    }
+
+    #[test]
+    fn clean_plug_cycle_is_healthy() {
+        let result = classify_diagnostic(
+            "hc-0-root-p1".into(),
+            vec![
+                sample(PortStatus::Empty, None),
+                sample(PortStatus::Connected, Some("device")),
+                sample(PortStatus::Empty, None),
+            ],
+            None,
+        );
+        assert_eq!(result.classification, DiagnosticClassification::Healthy);
     }
 }

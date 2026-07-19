@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-This project is a local, read-only Windows desktop utility. Only the latest commit on `main` is supported.
+This project is a local Windows desktop utility. Only the latest commit on `main` is supported.
 
 ## Reporting a vulnerability
 
@@ -21,6 +21,9 @@ You should receive an acknowledgment within a few days. Please give us a reasona
 
 ## Scope notes
 
-- The app is intentionally **read-only** (no eject / disable / power policy in v1).
+- Topology and diagnostics are read-only. The only mutating operation is a confirmed, policy-guarded Windows hub-port cycle.
+- Port cycling normally requires launching the app as administrator. Do not use the elevated app for routine browsing, and close it after recovery.
+- The backend resolves opaque port IDs against a fresh topology and rejects arbitrary paths. Recovery is blocked for overcurrent, hubs, storage, input, network, and wireless devices.
+- The app does not eject, disable/enable, reset controllers, install drivers, or change power policy.
 - It talks to the local Windows USB stack; it does not phone home and does not collect telemetry.
 - Do not include secrets, personal device inventories, or full system dumps in reports unless they are required to demonstrate the issue — redact where possible.

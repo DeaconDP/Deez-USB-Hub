@@ -114,6 +114,47 @@ export interface UsbTopology {
   enumeratedAt: string;
 }
 
+export type DiagnosticClassification =
+  | "healthy"
+  | "intermittent"
+  | "windowsReportedFault"
+  | "inconclusive";
+
+export interface PortDiagnosticSample {
+  status: PortStatus;
+  statusLabel: string;
+  deviceId?: string | null;
+  speed?: string | null;
+  pnpProblemCode?: number | null;
+  sampledAt: string;
+}
+
+export interface PortDiagnosticResult {
+  portId: string;
+  classification: DiagnosticClassification;
+  summary: string;
+  samples: PortDiagnosticSample[];
+  faultCount: number;
+  transitionCount: number;
+  recoveryAllowed: boolean;
+  recoveryBlockedReason?: string | null;
+}
+
+export type RecoveryStatus =
+  | "succeeded"
+  | "denied"
+  | "elevationRequired"
+  | "failed";
+
+export interface PortRecoveryResult {
+  portId: string;
+  status: RecoveryStatus;
+  code: string;
+  message: string;
+  beforeStatus: PortStatus;
+  afterStatus?: PortStatus | null;
+}
+
 export type Selection =
   | { kind: "all" }
   | { kind: "controller"; id: string }

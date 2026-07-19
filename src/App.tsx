@@ -28,6 +28,17 @@ function App() {
     return topology.devices.find((d) => d.id === selectedDeviceId) ?? null;
   }, [topology, selectedDeviceId]);
 
+  const selectedPort: UsbPort | null = useMemo(() => {
+    if (!topology) return null;
+    if (selectedDevice) {
+      return findPort(topology, selectedDevice.hubId, selectedDevice.portIndex);
+    }
+    if (selection.kind === "port") {
+      return findPort(topology, selection.hubId, selection.portIndex);
+    }
+    return null;
+  }, [topology, selectedDevice, selection]);
+
   const faultPort: UsbPort | null = useMemo(() => {
     if (!topology) return null;
     if (selectedFaultPortId) {
@@ -80,9 +91,12 @@ function App() {
 
       <header className="app-header">
         <div className="brand-block">
-          <p className="brand-mark" aria-hidden="true">
-            ⎈
-          </p>
+          <img
+            className="brand-mark"
+            src="/icon-512.png"
+            alt=""
+            aria-hidden="true"
+          />
           <div>
             <h1 className="brand">Deez USB Hub</h1>
             <p className="tagline">Windows topology · ports · descriptors</p>
@@ -175,9 +189,11 @@ function App() {
         <div className="pane pane-details">
           <DetailsPanel
             device={selectedDevice}
+            port={selectedPort}
             faultPort={faultPort}
             state={state}
             error={error}
+            refresh={refresh}
           />
         </div>
       </main>

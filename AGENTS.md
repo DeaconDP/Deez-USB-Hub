@@ -17,7 +17,8 @@ Windows-first Tauri 2 desktop app that maps USB controllers → hubs → ports (
 
 ## Conventions
 
-- Read-only in v1 — no eject/disable.
+- Diagnostics are read-only. The only mutation is a confirmed, policy-guarded
+  single-port cycle; no eject, disable/enable, controller reset, or power policy.
 - Error codes: `USB-001` enumerate fail, `USB-002` hub open denied, `USB-003` platform unsupported.
 - Cyberpunk visual tokens in `src/App.css`; keep neon accents restrained.
 - Prefer updating ROADMAP Deferred when skipping work.
