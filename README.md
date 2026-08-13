@@ -1,84 +1,48 @@
 # Deez USB Hub
 
-Windows-first desktop app that maps your USB topology — host controllers, hubs, **every port** (empty or occupied), and deep per-device details.
+<p align="center">
+  <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-USB-Hub@PLACEHOLDER/docs/screenshots/hero.png" alt="Deez USB Hub" width="720" />
+</p>
 
-Built with **Tauri 2 + React + TypeScript**. The Rust side talks to the Windows USB stack via SetupAPI and hub IOCTLs.
+Windows-first Tauri app that maps USB controllers, hubs, and every port — empty or occupied — with deep device details.
 
-Created by [deac.online](https://deac.online) @ [worldbuild.io](https://worldbuild.io)
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![Platform: Windows-first](https://img.shields.io/badge/platform-Windows-first-informational)
 
-## Prerequisites
+## Who it’s for
 
-- Windows 10/11
-- [Node.js](https://nodejs.org/) 20+
-- [Rust](https://rustup.rs/) (stable)
-- WebView2 (usually preinstalled on Windows 11)
+Anyone debugging docks, hubs, and mystery USB devices who wants a topology map instead of Device Manager sprawl.
 
-## Run (one-click)
+## Quick start
 
-- **Windows:** double-click `run.bat`
-- **macOS / Linux:** double-click `run.command` (or `chmod +x run.command && ./run.command`)
-
-Installs npm deps if needed, then starts `tauri dev` (Vite on **http://localhost:1420**). Needs Node 20+, Rust, and WebView2 on Windows. A second launch stops the previous owned instance first.
-
-## Develop
+**Requires** Node.js, Rust, Windows WebView2 (Windows-first).
 
 ```bash
 npm install
-npm run tauri dev
+npm run tauri:dev
 ```
 
-## Build
+Or use project `run.bat` / `run.command` if present.
 
-```bash
-npm run tauri build
-```
+## Features
 
-## UI
+- Host controllers → hubs → ports (including empty)
+- Per-device details for occupied ports
+- Desktop Tauri shell
 
-| Pane | Role |
-|------|------|
-| **Ports** | Controllers → hubs → ports (empty ports shown) |
-| **Devices** | Devices under the current selection |
-| **Details** | VID/PID, strings, speed, interfaces, endpoints, PnP/driver, guided port assessment |
+## Limitations
 
-Hotplug: the tree refreshes automatically when devices are plugged or unplugged. Use **Refresh** for a manual pass.
+- Windows-first; other platforms may be limited
+- Needs native permissions to enumerate USB
 
-## Assess and recover a port
+## Development
 
-1. Select an occupied, empty, or faulted port and open **Details**.
-2. Choose **Test this port**, then use a known-good, low-risk USB device and cable during the six-second sample window.
-3. Review the observed Windows state: likely healthy, intermittent, Windows-reported fault, or inconclusive.
-4. If the target passes the safety policy, confirm **Attempt port recovery** to ask Windows to cycle that one hub port.
+Vite default for Tauri webview is port **1420** in-repo.
 
-Assessment is observational, not an electrical certification. It cannot repair bent pins, debris, worn connectors, cracked solder joints, bad cables, inadequate power, or damaged controller hardware. Stop and inspect the hardware after overcurrent; recovery is deliberately blocked.
+## Credit
 
-Diagnostics run without elevation. Port recovery normally requires closing the app and launching it as administrator. Recovery is also blocked for hubs/downstream trees, storage, input, network, and wireless devices to avoid data loss or loss of control/connectivity.
-
-## Known gaps
-
-- Verified on a live Windows machine: host controllers map with empty ports (e.g. root hub 24 ports / 19 empty) and nested external hubs appear under their parent.
-- Some root/virtual hubs may still refuse IOCTLs; those controllers appear as **unmapped** with connected devices only (never a silent failure). Warnings use codes `USB-001` / `USB-002`.
-- Companion USB 2.0 / 3.x port pairs can look like “extra” ports on the same physical connector — that is how Windows exposes them.
-- String descriptors and endpoint tables depend on what the hub stack returns; composite devices may appear as multiple PnP nodes.
-- macOS/Linux backends are not implemented yet (Windows-first).
-- Recovery only cycles one eligible hub port. The app does not eject, disable/enable, reset controllers, or change power policy.
-- A successful cycle means Windows accepted the request; it does not prove a physical fault was repaired.
-
-## Error codes
-
-| Code | Meaning |
-|------|---------|
-| `USB-001` | Topology enumeration failed |
-| `USB-002` | Hub open denied or IOCTL failed |
-| `USB-003` | Platform not supported |
-| `USB-004` | Windows port-cycle operation failed or needs elevation |
-| `USB-005` | Recovery target or request denied by safety policy |
-| `USB-006` | Another diagnostic/recovery operation is already running |
-
-## Security
-
-See [SECURITY.md](SECURITY.md) for how to report vulnerabilities.
+Created by [deac.online](https://deac.online) @ [worldbuild.io](https://worldbuild.io)
 
 ## License
 
-[MIT](LICENSE)
+MIT — see [LICENSE](LICENSE).
