@@ -1,7 +1,7 @@
 # Deez USB Hub
 
 <p align="center">
-  <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-USB-Hub@PLACEHOLDER/docs/screenshots/hero.png" alt="Deez USB Hub" width="720" />
+  <img src="https://cdn.jsdelivr.net/gh/DeaconDP/Deez-USB-Hub@9cbddf6464da392b1de35a83970baff8a5b3e817/docs/screenshots/hero.png" alt="Deez USB Hub" width="720" />
 </p>
 
 Windows-first Tauri app that maps USB controllers, hubs, and every port — empty or occupied — with deep device details.
